@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - For persistent data
+  postgres:
+    image: postgres:15-alpine
+    container_name: marketing-postgres
+    environment:
+      POSTGRES_DB: marketing_system
+      POSTGRES_USER: marketing_user
+      POSTGRES_PASSWORD: marketing_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketing_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - For caching and short-term memory
+  redis:
+    image: redis:7-alpine
+    container_name: marketing-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Neo4j - For knowledge graph
+  neo4j:
+    image: neo4j:5.13-community
+    container_name: marketing-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/marketing_password
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"  # Web interface
+      - "7687:7687"  # Bolt protocol
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "marketing_password", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:
