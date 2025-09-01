@@ -278,16 +278,16 @@ class LeadTriageAgent(BaseAgent):
     async def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Triage incoming lead"""
         lead_data = request.get("lead_data")
-        
+        print(f"\n[NARRATOR] LeadTriageAgent: Received lead {lead_data.get('lead_id')} for triage.")
         # Calculate lead score
         lead_score = await self._calculate_lead_score(lead_data)
-        
+        print(f"[NARRATOR] LeadTriageAgent: Calculated lead score {lead_score} for {lead_data.get('lead_id')}")
         # Classify lead
         triage_category = await self._classify_lead(lead_data, lead_score)
-        
+        print(f"[NARRATOR] LeadTriageAgent: Classified lead {lead_data.get('lead_id')} as {triage_category.value}")
         # Determine next agent
         next_agent = self._determine_next_agent(triage_category)
-        
+        print(f"[NARRATOR] LeadTriageAgent: Assigned agent {next_agent} for category {triage_category.value}")
         response = {
             "lead_id": lead_data.get("lead_id"),
             "triage_category": triage_category.value,
@@ -296,16 +296,15 @@ class LeadTriageAgent(BaseAgent):
             "confidence": 0.85,
             "reasoning": f"Classified as {triage_category.value} based on score {lead_score}"
         }
-        
         # Log triage action
         await self.log_action(ActionType.TRIAGE, {
             "lead_id": lead_data.get("lead_id"),
             "triage_category": triage_category.value,
             "lead_score": lead_score
         })
-        
+        print(f"[NARRATOR] LeadTriageAgent: Triage action logged for {lead_data.get('lead_id')}")
         return response
-    
+
     async def _calculate_lead_score(self, lead_data: Dict[str, Any]) -> int:
         """Calculate lead score based on attributes"""
         model = self.classification_model
@@ -400,33 +399,32 @@ class EngagementAgent(BaseAgent):
         """Execute engagement sequence for lead"""
         lead_data = request.get("lead_data")
         triage_category = lead_data.get("triage_category")
-        
+        print(f"\n[NARRATOR] EngagementAgent: Received lead {lead_data.get('lead_id')} for engagement. Triage category: {triage_category}")
         # Get engagement strategy
         strategy = self.engagement_strategies.get(triage_category, 
                                                 self.engagement_strategies["General Inquiry"])
-        
+        print(f"[NARRATOR] EngagementAgent: Selected strategy for {triage_category}: {strategy['sequence']}")
         # Generate personalized outreach
         outreach_plan = await self._create_outreach_plan(lead_data, strategy)
-        
+        print(f"[NARRATOR] EngagementAgent: Created outreach plan for {lead_data.get('lead_id')}")
         # Execute first touchpoint
         first_interaction = await self._execute_touchpoint(lead_data, outreach_plan[0])
-        
+        print(f"[NARRATOR] EngagementAgent: Executed first touchpoint: {first_interaction['action']} via {first_interaction['channel']}")
         response = {
             "lead_id": lead_data.get("lead_id"),
             "engagement_plan": outreach_plan,
             "first_interaction": first_interaction,
             "next_touchpoint": outreach_plan[1] if len(outreach_plan) > 1 else None
         }
-        
         # Log engagement action
         await self.log_action(ActionType.OUTREACH, {
             "lead_id": lead_data.get("lead_id"),
             "strategy": triage_category,
             "touchpoint": first_interaction
         })
-        
+        print(f"[NARRATOR] EngagementAgent: Outreach action logged for {lead_data.get('lead_id')}")
         return response
-    
+
     async def _create_outreach_plan(self, lead_data: Dict[str, Any], strategy: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Create personalized outreach sequence"""
         plan = []

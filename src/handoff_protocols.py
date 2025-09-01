@@ -19,7 +19,8 @@ from .agent_framework import (
     BaseAgent, AgentType, ActionType, LeadTriageAgent, 
     EngagementAgent, CampaignOptimizationAgent
 )
-from .mcp_jsonrpc import MCPServer, MCPClient, MCPMethod
+
+from .mcp_jsonrpc import MCPServer, MCPClient, MCPMethod, MCPWebSocketServer, MCPHTTPServer
 from .memory_systems import (
     UnifiedMemoryManager, ConversationContext, LeadProfile, Episode
 )
@@ -377,18 +378,18 @@ class HandoffOrchestrator:
         priority: HandoffPriority = HandoffPriority.MEDIUM
     ) -> HandoffResult:
         """Initiate agent handoff process"""
-        
+        print(f"\n[NARRATOR] HandoffOrchestrator: Initiating handoff from {source_agent.agent_id} to {target_agent_type.value}.")
         start_time = datetime.now()
-        
         try:
             # Create comprehensive handoff context
             handoff_context = await self.context_engine.create_handoff_context(
                 source_agent, target_agent_type, current_state, trigger, reason
             )
             handoff_context.priority = priority
-            
+            print(f"[NARRATOR] HandoffOrchestrator: Created handoff context with completeness score {handoff_context.context_completeness_score:.2f}")
             # Validate context quality
             if handoff_context.context_completeness_score < self.handoff_quality_threshold:
+                print(f"[NARRATOR] HandoffOrchestrator: Context quality too low ({handoff_context.context_completeness_score:.2f}), aborting handoff.")
                 return HandoffResult(
                     handoff_id=handoff_context.handoff_id,
                     success=False,
@@ -398,10 +399,10 @@ class HandoffOrchestrator:
                     quality_score=handoff_context.context_completeness_score,
                     errors=[f"Context quality too low: {handoff_context.context_completeness_score:.2f}"]
                 )
-            
             # Select target agent instance
             target_agent = await self._select_target_agent(target_agent_type, handoff_context)
             if not target_agent:
+                print(f"[NARRATOR] HandoffOrchestrator: No available target agent for {target_agent_type.value}.")
                 return HandoffResult(
                     handoff_id=handoff_context.handoff_id,
                     success=False,
@@ -411,35 +412,31 @@ class HandoffOrchestrator:
                     quality_score=handoff_context.context_completeness_score,
                     errors=["No available target agent"]
                 )
-            
             handoff_context.target_agent_id = target_agent.agent_id
-            
+            print(f"[NARRATOR] HandoffOrchestrator: Selected target agent {target_agent.agent_id} for handoff.")
             # Store handoff context
             self.active_handoffs[handoff_context.handoff_id] = handoff_context
-            
             # Execute handoff
             handoff_result = await self._execute_handoff(handoff_context, target_agent)
-            
+            print(f"[NARRATOR] HandoffOrchestrator: Handoff executed. Success: {handoff_result.success}")
             # Update metrics
             processing_time = (datetime.now() - start_time).total_seconds() * 1000
             handoff_result.processing_time_ms = int(processing_time)
-            
             # Log handoff action via MCP
             await self._log_handoff_action(handoff_context, handoff_result)
-            
+            print(f"[NARRATOR] HandoffOrchestrator: Handoff action logged for {handoff_context.handoff_id}")
             # Update performance metrics
             await self._update_performance_metrics(handoff_context, handoff_result)
-            
             # Cleanup active handoff
             if handoff_context.handoff_id in self.active_handoffs:
                 handoff_context.completed_at = datetime.now()
                 handoff_context.handoff_success = handoff_result.success
                 self.handoff_history.append(handoff_context)
                 del self.active_handoffs[handoff_context.handoff_id]
-            
+            print(f"[NARRATOR] HandoffOrchestrator: Handoff {handoff_context.handoff_id} completed and cleaned up.")
             return handoff_result
-            
         except Exception as e:
+            print(f"[NARRATOR] HandoffOrchestrator: Exception during handoff: {str(e)}")
             self.logger.error(f"Handoff failed: {str(e)}")
             return HandoffResult(
                 handoff_id=handoff_context.handoff_id if 'handoff_context' in locals() else "unknown",
@@ -489,6 +486,11 @@ class HandoffOrchestrator:
                 "interaction_history": context.interaction_history
             }
             
+            # Debug: Check type of target_agent and handle_handoff
+            print(f"[DEBUG] target_agent type: {type(target_agent)}")
+            print(f"[DEBUG] target_agent.handle_handoff: {getattr(target_agent, 'handle_handoff', None)}")
+            if not callable(getattr(target_agent, 'handle_handoff', None)):
+                raise TypeError(f"target_agent.handle_handoff is not callable. Value: {getattr(target_agent, 'handle_handoff', None)}")
             # Execute handoff on target agent
             result = await target_agent.handle_handoff(handoff_data)
             
@@ -675,7 +677,9 @@ class IntegratedMarketingSystem:
         self.memory_manager = UnifiedMemoryManager()
         self.mcp_server = MCPServer()
         self.mcp_client = MCPClient("ws://localhost:8765")
-        
+        self.ws_server = MCPWebSocketServer(self.mcp_server) # The WebSocket server
+        self.http_server = MCPHTTPServer(self.mcp_server)   # The HTTP server (optional but good to have)
+
         # Initialize agents
         self.agents = {
             AgentType.LEAD_TRIAGE: LeadTriageAgent("triage-001"),
@@ -703,11 +707,20 @@ class IntegratedMarketingSystem:
             "system_uptime": datetime.now()
         }
     
+    # In src/handoff_protocols.py
+
     async def start_system(self):
         """Start the integrated marketing system"""
         print("🚀 Starting Integrated Marketing System...")
-        
-        # Connect MCP client
+
+        # START THE SERVERS FIRST
+        self.ws_server_task = asyncio.create_task(self.ws_server.start())
+        self.http_server_task = asyncio.create_task(self.http_server.start())
+
+        # Give the servers a moment to start up before connecting
+        await asyncio.sleep(1) 
+
+        # Now, connect the client
         await self.mcp_client.connect()
         
         # Start memory consolidation
@@ -721,6 +734,8 @@ class IntegratedMarketingSystem:
         self.system_running = True
         print("✅ System started successfully!")
     
+    # In src/handoff_protocols.py
+
     async def stop_system(self):
         """Stop the integrated marketing system"""
         print("🛑 Stopping system...")
@@ -732,6 +747,13 @@ class IntegratedMarketingSystem:
         
         # Disconnect MCP client
         await self.mcp_client.disconnect()
+
+        # ADD THIS BLOCK TO STOP THE SERVERS
+        # Stop the servers
+        if hasattr(self, 'ws_server_task'):
+            await self.ws_server.stop()
+            self.ws_server_task.cancel()
+        # You would add similar logic for the http_server if needed
         
         print("✅ System stopped successfully!")
     
@@ -977,6 +999,12 @@ async def main():
         print(json.dumps(status, indent=2, default=str))
         
     finally:
+        # Print full system status before stopping
+        print("\n==== FINAL SYSTEM STATUS BEFORE STOP ====")
+        final_status = await system.get_system_status()
+        print(json.dumps(final_status, indent=2, default=str))
+        print("\n==== ACTIVE CONVERSATIONS ====")
+        print(json.dumps(system.active_conversations, indent=2, default=str))
         # Stop system
         await system.stop_system()
 

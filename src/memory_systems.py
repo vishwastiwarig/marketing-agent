@@ -275,7 +275,7 @@ class LongTermMemory(MemoryStore):
     async def initialize_with_historical_data(self):
         """Initialize memory with historical data from CSV files"""
         try:
-            from data_loader import data_loader
+            from .data_loader import data_loader
             datasets = data_loader.datasets
             
             print("🧠 Initializing memory with historical data...")
@@ -570,7 +570,7 @@ class EpisodicMemory(MemoryStore):
     async def initialize_with_historical_episodes(self):
         """Initialize with historical episodic data"""
         try:
-            from data_loader import data_loader
+            from .data_loader import data_loader
             datasets = data_loader.datasets
             
             print("🎭 Loading episodic memories...")
@@ -807,7 +807,7 @@ class SemanticMemory(MemoryStore):
     async def initialize_with_knowledge_graph(self):
         """Initialize with semantic knowledge from CSV"""
         try:
-            from data_loader import data_loader
+            from .data_loader import data_loader
             datasets = data_loader.datasets
             
             print("🕸️  Loading semantic knowledge graph...")

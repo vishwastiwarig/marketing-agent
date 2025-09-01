@@ -15,6 +15,8 @@ class DatabaseConfig:
         self.redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
         self.neo4j_url = os.getenv('NEO4J_URL', 'bolt://localhost:7687')
         self.neo4j_auth = ('neo4j', 'marketing_password')
+        
+        print(f"DEBUG: Connecting to PostgreSQL with URL: {self.postgres_url}")
 
 class PostgreSQLManager:
     def __init__(self, config: DatabaseConfig):
