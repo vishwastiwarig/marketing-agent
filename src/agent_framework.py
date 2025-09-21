@@ -1,5 +1,5 @@
 """
-Purple Merit Technologies - Marketing Multi-Agent System
+Marketing Multi-Agent System
 Core Agent Framework with Data Models
 """
 
